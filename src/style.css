@@ -1,0 +1,179 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&display=swap');
+
+:root {
+  color: #e8f7ff;
+  background: #050010;
+  font-family: Orbitron, system-ui, sans-serif;
+  line-height: 1.4;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 50% 20%, #1a0040 0%, #050010 55%);
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+}
+
+.camera-feed {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 24px 20px max(24px, env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.panel {
+  pointer-events: auto;
+  width: min(440px, 100%);
+  padding: 20px 22px 22px;
+  border-radius: 16px;
+  border: 1px solid rgba(0, 245, 255, 0.35);
+  background: rgba(8, 0, 24, 0.82);
+  box-shadow:
+    0 0 40px rgba(255, 0, 229, 0.15),
+    inset 0 0 30px rgba(0, 245, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.panel.compact {
+  transform: translateY(12px) scale(0.92);
+  opacity: 0.85;
+}
+
+.panel.hidden {
+  display: none;
+}
+
+.title {
+  margin: 0 0 6px;
+  font-size: clamp(1.35rem, 4vw, 1.75rem);
+  letter-spacing: 0.08em;
+  color: #00f5ff;
+  text-shadow: 0 0 18px rgba(0, 245, 255, 0.65);
+}
+
+.tagline {
+  margin: 0 0 14px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-family: system-ui, sans-serif;
+}
+
+.status {
+  min-height: 2.6em;
+  margin: 0 0 14px;
+  font-size: 0.85rem;
+  color: #ff9cf7;
+  font-family: system-ui, sans-serif;
+}
+
+.progress {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00f5ff, #ff00e5);
+  box-shadow: 0 0 12px rgba(255, 0, 229, 0.6);
+  transition: width 0.2s ease;
+}
+
+.file-input {
+  display: none;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: none;
+  font: 700 0.85rem Orbitron, system-ui, sans-serif;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.btn.primary {
+  color: #050010;
+  background: linear-gradient(135deg, #00f5ff, #ff00e5);
+  box-shadow: 0 0 24px rgba(0, 245, 255, 0.35);
+}
+
+.btn.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.secondary {
+  color: #00f5ff;
+  background: transparent;
+  border: 1px solid rgba(0, 245, 255, 0.45);
+}
+
+.privacy {
+  pointer-events: none;
+  margin: 14px 0 0;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: system-ui, sans-serif;
+  text-align: center;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .overlay {
+    justify-content: center;
+  }
+}
