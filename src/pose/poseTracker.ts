@@ -1,6 +1,6 @@
 import * as tf from '@tensorflow/tfjs-core'
 import '@tensorflow/tfjs-backend-webgl'
-import * as poseDetection from '@tensorflow-models/pose-detection'
+import type * as poseDetection from '@tensorflow-models/pose-detection'
 import type { HandPositions } from '../game/types.ts'
 
 export type PoseLoadProgress = (message: string, ratio: number) => void
@@ -19,6 +19,7 @@ export class PoseTracker {
     await tf.setBackend('webgl')
     await tf.ready()
     onProgress('Loading MoveNet (lightning)…', 0.25)
+    const poseDetection = await import('@tensorflow-models/pose-detection')
     this.detector = await poseDetection.createDetector(
       poseDetection.SupportedModels.MoveNet,
       {
