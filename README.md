@@ -40,6 +40,6 @@ npm run dev      # https needed on phones: use the deployed site or a tunnel
 npm run build
 ```
 
-`npm run dev/build` copies the MediaPipe WASM runtime from `node_modules` into `public/mediapipe/`. The pose model is committed at `public/models/pose_landmarker_lite.task`.
+`npm run dev/build` copies the MediaPipe WASM runtime from `node_modules` into `public/mediapipe/`. It also downloads the pose model to `public/models/` the first time.
 
 Pushes to `main` deploy to GitHub Pages via `.github/workflows/deploy-pages.yml`.
