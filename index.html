@@ -1,17 +1,125 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    />
-    <meta name="theme-color" content="#050010" />
-    <title>Move Your Body — rhythm pose game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#05010f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="description" content="Techno motion rhythm game: upload an MP3 and hit neon flying saucers with your palms using your camera." />
+    <title>MOVE YOUR BODY</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <video id="camera" class="camera" playsinline muted></video>
+      <div class="camera-tint"></div>
+      <canvas id="stage" class="stage"></canvas>
+
+      <!-- MENU -->
+      <section id="menu" class="screen active">
+        <div class="menu-inner">
+          <div class="logo" data-text="MOVE YOUR BODY">MOVE YOUR BODY</div>
+          <p class="tagline">// 體感節奏 · NEON SAUCER BEAT ATTACK</p>
+
+          <label id="drop" class="drop">
+            <input id="file" type="file" accept="audio/mpeg,audio/mp3,audio/*,.mp3" hidden />
+            <span class="drop-icon">⬆</span>
+            <span id="drop-text" class="drop-text">上載 MP3 / UPLOAD TRACK</span>
+            <span class="drop-sub">tap or drop a file · 只在本機分析</span>
+          </label>
+          <button id="demo" class="btn ghost small">▶ 無MP3？用 DEMO TECHNO 128 BPM</button>
+
+          <div class="diff" role="radiogroup" aria-label="Difficulty">
+            <button class="diff-btn" data-diff="easy" role="radio">EASY</button>
+            <button class="diff-btn active" data-diff="normal" role="radio">NORMAL</button>
+            <button class="diff-btn" data-diff="hard" role="radio">HARD</button>
+          </div>
+
+          <button id="start" class="btn primary" disabled>START ▸</button>
+          <p id="best" class="best"></p>
+
+          <div class="how">
+            <div><b>HOVER</b><span>手掌泊喺飛碟上，準時到點</span></div>
+            <div><b>SLAP</b><span>快速拍穿飛碟 = BONUS</span></div>
+            <div><b>RANK</b><span>S+++ · S++ · S+ · S · A · B · C</span></div>
+          </div>
+          <p class="privacy">🔒 鏡頭及音樂只在你的裝置內處理，不會上載。</p>
+        </div>
+      </section>
+
+      <!-- LOADING -->
+      <section id="loading" class="screen">
+        <div class="panel">
+          <div class="spinner"></div>
+          <p id="load-text" class="load-text">INITIALIZING</p>
+          <div class="bar"><div id="load-bar" class="bar-fill"></div></div>
+          <p id="load-sub" class="load-sub"></p>
+        </div>
+      </section>
+
+      <!-- CALIBRATE -->
+      <section id="calibrate" class="screen">
+        <div class="calib-box">
+          <p class="calib-title">SYNC YOUR BODY</p>
+          <p id="calib-text" class="calib-text">退後一點，讓鏡頭見到你的頭、肩膀和雙手</p>
+          <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="ring-bg" /><circle id="calib-ring" cx="50" cy="50" r="44" class="ring-fg" /></svg><span>🙌</span></div>
+          <p class="calib-hint">舉高雙手過肩 1 秒開始 · RAISE BOTH HANDS</p>
+          <button id="skip-calib" class="btn ghost small">直接開始 START NOW</button>
+        </div>
+      </section>
+
+      <!-- HUD -->
+      <section id="hud" class="hud">
+        <div class="hud-top">
+          <div class="hud-score"><small>SCORE</small><span id="score">0000000</span></div>
+          <div class="hud-rank"><small>RANK</small><span id="rank">—</span></div>
+          <button id="pause" class="icon-btn" aria-label="Pause">❚❚</button>
+        </div>
+        <div class="progress"><div id="progress" class="progress-fill"></div></div>
+        <div id="combo" class="combo"><span id="combo-n">0</span><small>COMBO</small></div>
+        <div id="countdown" class="countdown"></div>
+        <div id="lost" class="lost">⚠ 找不到你的身體 · STEP INTO VIEW</div>
+      </section>
+
+      <!-- PAUSE -->
+      <section id="paused" class="screen">
+        <div class="panel">
+          <p class="panel-title">PAUSED</p>
+          <button id="resume" class="btn primary">RESUME</button>
+          <button id="restart" class="btn ghost">RESTART</button>
+          <button id="quit" class="btn ghost">QUIT</button>
+        </div>
+      </section>
+
+      <!-- RESULTS -->
+      <section id="results" class="screen">
+        <div class="panel results">
+          <p class="panel-title">STAGE CLEAR</p>
+          <div id="grade" class="grade" data-text="S">S</div>
+          <p id="final-score" class="final-score">0</p>
+          <p id="new-best" class="new-best">NEW BEST!</p>
+          <div class="stats">
+            <div><b id="r-perfect">0</b><span class="c-perfect">PERFECT</span></div>
+            <div><b id="r-great">0</b><span class="c-great">GREAT</span></div>
+            <div><b id="r-good">0</b><span class="c-good">GOOD</span></div>
+            <div><b id="r-miss">0</b><span class="c-miss">MISS</span></div>
+            <div><b id="r-combo">0</b><span>MAX COMBO</span></div>
+            <div><b id="r-slaps">0</b><span>SLAPS</span></div>
+          </div>
+          <div class="row">
+            <button id="again" class="btn primary">RETRY</button>
+            <button id="to-menu" class="btn ghost">NEW TRACK</button>
+          </div>
+        </div>
+      </section>
+
+      <div id="toast" class="toast"></div>
+      <div class="scanlines"></div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

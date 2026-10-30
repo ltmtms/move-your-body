@@ -4,17 +4,18 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "copy:wasm": "node scripts/copy-mediapipe.mjs",
+    "predev": "npm run copy:wasm",
+    "prebuild": "npm run copy:wasm",
+    "dev": "vite --host",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host"
   },
   "devDependencies": {
     "typescript": "~7.0.2",
     "vite": "^8.3.5"
   },
   "dependencies": {
-    "@tensorflow-models/pose-detection": "^2.1.3",
-    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
-    "@tensorflow/tfjs-core": "^4.22.0"
+    "@mediapipe/tasks-vision": "^1.2.0"
   }
 }
