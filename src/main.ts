@@ -1,5 +1,6 @@
 import './style.css'
 import { analyze, audioContext, decodeFile, hashString, renderDemoTrack, SongPlayer, Sfx } from './audio/audio.ts'
+import type { HitKits } from './audio/kits.ts'
 import { Engine, gradeFor, SLAP_SPEED } from './game/engine.ts'
 import { Renderer } from './game/renderer.ts'
 import type { BodyFrame, Chart, Difficulty } from './game/types.ts'
@@ -8,7 +9,14 @@ import { openCamera, PoseTracker } from './pose/tracker.ts'
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T
 
+/** target flight time; snapped to whole beats so saucers launch on the beat */
 const LEAD: Record<Difficulty, number> = { easy: 1.9, normal: 1.55, hard: 1.25 }
+
+function leadFor(d: Difficulty, bpm: number): number {
+  const beat = 60 / bpm
+  return Math.max(2, Math.round(LEAD[d] / beat)) * beat
+}
+
 const COUNT_IN = 3
 
 const video = $<HTMLVideoElement>('camera')
@@ -63,6 +71,8 @@ let tracker: PoseTracker | null = null
 let player: SongPlayer | null = null
 let engine: Engine | null = null
 let sfx: Sfx | null = null
+let kits: HitKits | null = null
+let kitShown = -1
 let mode: 'idle' | 'calibrate' | 'play' | 'paused' = 'idle'
 let lastFrame: BodyFrame | null = null
 let calibHold = 0
@@ -141,6 +151,10 @@ async function begin(): Promise<void> {
   sfx ??= new Sfx()
   show('loading')
   try {
+    if (!kits) {
+      const { HitKits } = await import('./audio/kits.ts')
+      kits = HitKits.create(audioContext())
+    }
     // camera first so the permission prompt appears while we crunch audio
     if (!video.srcObject) {
       setLoading('CAMERA ACCESS', 0.05, '請允許使用鏡頭 · allow camera')
@@ -219,11 +233,12 @@ function startGame(): void {
   player?.stop()
   player = new SongPlayer(track.buffer)
   const p = player
-  engine = new Engine(chart, LEAD[difficulty], view, (ms) => p.timeAt(ms))
+  engine = new Engine(chart, leadFor(difficulty, chart.bpm), view, (ms) => p.timeAt(ms))
+  kitShown = -1
   engine.onEvent = (e) => {
     renderer.event(e)
     if (e.judgment === 'miss') sfx?.miss()
-    else sfx?.hit(e.judgment, e.slap)
+    else kits?.hit(e.side ?? e.note.side, e.judgment, e.slap, e.note.beat)
     bumpCombo()
   }
   player.play(0.05, -COUNT_IN)
@@ -339,6 +354,23 @@ function finish(): void {
   show('results')
 }
 
+/** switch the percussion kit when the song enters a new section */
+function updateKit(t: number): void {
+  if (!chart || !kits) return
+  let k = chart.sections[0]?.kit ?? 0
+  for (const s of chart.sections) if (s.start <= t) k = s.kit
+  if (kits.setKit(k) || kitShown < 0) {
+    const first = kitShown < 0
+    kitShown = k
+    if (first) return
+    const b = $('kit')
+    b.textContent = `♫ SOUND ▸ ${kits.names[k]}`
+    b.classList.remove('show')
+    void b.offsetWidth
+    b.classList.add('show')
+  }
+}
+
 // ───────────────────────── main loop ─────────────────────────
 function frame(now: number): void {
   const dt = Math.min(0.1, (now - lastTick) / 1000)
@@ -370,6 +402,7 @@ function frame(now: number): void {
         cd.classList.add('pop')
         sfx?.tick(true)
       }
+      updateKit(t)
       $('lost').classList.toggle('visible', !lastFrame?.anchor || now - (lastFrame?.t ?? 0) > 1500)
       if (player.ended || (engine.finished && t > chart.duration - 0.2) || t > chart.duration + 1) finish()
     }

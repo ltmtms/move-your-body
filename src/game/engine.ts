@@ -36,6 +36,8 @@ export interface NoteState extends Note {
   best: number | null
   bestSlap: boolean
   touching: boolean
+  /** which palm made the best contact */
+  hand?: Side
   judgment?: Judgment
   slap?: boolean
   /** where/when it was resolved, for effects */
@@ -183,6 +185,7 @@ export class Engine {
         if (n.best === null || off < n.best - 0.01 || (Math.abs(off - n.best) <= 0.01 && slap)) {
           n.best = off
           n.bestSlap = slap
+          n.hand = side
         }
         n.at = { x: cur.x, y: cur.y }
         if (n.best <= 0.02) this.resolve(n, side, frame)
@@ -233,7 +236,7 @@ export class Engine {
         s.score += SLAP_BONUS
       }
     }
-    this.onEvent?.({ note: n, judgment: j, slap: !!n.slap, pos, offset: n.best ?? 0, side })
+    this.onEvent?.({ note: n, judgment: j, slap: !!n.slap, pos, offset: n.best ?? 0, side: side ?? n.hand ?? null })
   }
 
   get finished(): boolean {

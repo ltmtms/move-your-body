@@ -145,43 +145,9 @@ export class SongPlayer {
   }
 }
 
-/** Synthesised hit sounds – no samples to download. */
+/** Miss and count-in sounds (hit sounds live in kits.ts). */
 export class Sfx {
   private ctx = audioContext()
-  private noise: AudioBuffer
-
-  constructor() {
-    const n = this.ctx.sampleRate * 0.2
-    this.noise = this.ctx.createBuffer(1, n, this.ctx.sampleRate)
-    const d = this.noise.getChannelData(0)
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 2
-  }
-
-  hit(kind: 'perfect' | 'great' | 'good', slap: boolean): void {
-    const t = this.ctx.currentTime
-    const o = this.ctx.createOscillator()
-    const g = this.ctx.createGain()
-    o.type = 'square'
-    const base = kind === 'perfect' ? 1320 : kind === 'great' ? 990 : 660
-    o.frequency.setValueAtTime(base, t)
-    o.frequency.exponentialRampToValueAtTime(base * 2, t + 0.06)
-    g.gain.setValueAtTime(0.08, t)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12)
-    o.connect(g).connect(this.ctx.destination)
-    o.start(t)
-    o.stop(t + 0.13)
-    if (slap) {
-      const s = this.ctx.createBufferSource()
-      s.buffer = this.noise
-      const f = this.ctx.createBiquadFilter()
-      f.type = 'highpass'
-      f.frequency.value = 1800
-      const sg = this.ctx.createGain()
-      sg.gain.value = 0.35
-      s.connect(f).connect(sg).connect(this.ctx.destination)
-      s.start(t)
-    }
-  }
 
   miss(): void {
     const t = this.ctx.currentTime
