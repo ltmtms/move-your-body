@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# copied from node_modules at build time
+public/mediapipe
+public/models
+deploy
