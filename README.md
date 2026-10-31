@@ -29,12 +29,21 @@ Works on phone, iPad and desktop (Chrome / Safari / Edge, HTTPS required for the
 | Mode | Saucers | Targets |
 | --- | --- | --- |
 | EASY | 1 per bar, on the downbeat (重拍) | 2 fixed targets, one per hand |
-| NORMAL | 2 per bar (beats 1 & 3) | the same 2 fixed targets |
-| HARD | every beat + a syncopated off-beat in loud bars | 8 targets that move around your body |
+| NORMAL | every beat (beats 1 & 3 in quiet bars) + a "4-and" pickup in loud bars | the same 2 fixed targets |
+| HARD | every beat + up to 2 off-beats per loud bar, all 4 at full power | 8 targets that move around your body |
 
 Saucers launch on a beat and arrive on the beat. Quiet intros and breaks get fewer saucers.
 
-Every hit plays a synthesized percussion sound, with different voices for the left and right hand. The song is split into up to 4 sections (intro, verse, drop…), and each section gets its own kit (808, METAL, FM, ELECTRO). The sound therefore changes at most 3 times per song. Within a kit, downbeats are accented, the pitch moves with the beat in the bar, and slaps add a crack.
+Every hit plays a synthesized drum. The song is split into up to 4 sections (intro, verse, drop…), and each section gets its own drum kit: ROCK, 808, LATIN or ELECTRO. The kit therefore changes at most 3 times per song. Inside a kit, the drum depends on the beat and on the hand:
+
+| | Downbeat | Beat 3 | Beats 2 & 4 | Off-beat |
+| --- | --- | --- | --- | --- |
+| ROCK | L kick · R snare | L floor tom · R rack tom | L low tom · R rim shot | hi-hat |
+| 808 | L 808 boom · R clap | L low tom · R hi tom | L mid tom · R cowbell | closed / open hat |
+| LATIN | L surdo · R timbale | L tumba · R bongo | L conga · R clave | shaker |
+| ELECTRO | L 909 kick · R 909 snare | L FM tom · R 909 clap | L FM tom · R zap | closed / open hat |
+
+Cymbals come in only now and then: a crash (a ride bell in LATIN) on the downbeat that opens each 4-bar phrase and on double saucers. A SLAP adds a splash.
 
 Rank = score ÷ best possible score: **S+++** (≥100%, no misses; SLAP bonuses get you there) · **S++** ≥95% · **S+** ≥90% · **S** ≥85% · **A** ≥75% · **B** ≥60% · **C**.
 Combo raises the multiplier up to ×2.
@@ -49,7 +58,7 @@ Combo raises the multiplier up to ×2.
 | Timing | Camera frames are stamped with `captureTime` and mapped to song time through `AudioContext.getOutputTimestamp()`, which covers audio output latency. |
 | Beat analysis | Runs in a Web Worker: 22 kHz mono → STFT log spectral flux. Tempo comes from autocorrelation of a kick/bass-weighted pulse, so off-beat hi-hats can't pull it half a beat off. Then a **dynamic-programming beat tracker** (Ellis 2007). |
 | Downbeats (重拍) | Each beat is scored on kick strength, a chord change (harmony chroma), a bassline change (bass chroma), a timbre change, and the backbeat (snare/clap on 2 and 4). The 4-beat phase with the best score in a sliding ±4-bar window marks the bar starts. Tested at 92–98% on synthetic tracks from 100 to 170 BPM and 93% on the demo track. |
-| Sections & kits | Phrase boundaries (every 4 bars) where loudness or timbre changes the most split the song into ≤ 4 sections. Hit sounds are synthesized with [Tone.js](https://tonejs.github.io) (MIT): MembraneSynth, MetalSynth, FMSynth and NoiseSynth through a compressor and light reverb. |
+| Sections & kits | Phrase boundaries (every 4 bars) where loudness or timbre changes the most split the song into ≤ 4 sections. Drums are synthesized with [Tone.js](https://tonejs.github.io) (MIT): MembraneSynth (kicks, toms, congas), NoiseSynth (snares, claps, shakers), MetalSynth (hats, cowbell, cymbals) and FMSynth (rim, clave, electro toms), through a compressor and light reverb. Levels were balanced by rendering each drum offline and measuring its peak. |
 | Rendering | Canvas 2D: synthwave floor whose lines are the song's beats, pre-rendered glowing saucer sprites, palm trails (white when you are slapping), particles. The DOM HUD uses safe-area insets. |
 
 Everything runs in your browser. Neither the camera feed nor the music leaves your device. The MediaPipe WASM and model are served from this site, not a CDN.

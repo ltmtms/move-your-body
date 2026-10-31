@@ -21,6 +21,8 @@ export interface Note {
   beat: number
   /** percussion kit of the song section this note is in */
   kit: number
+  /** also crash a cymbal on this hit (phrase starts, double saucers) */
+  cymbal: boolean
 }
 
 export interface Section {

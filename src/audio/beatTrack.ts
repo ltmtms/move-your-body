@@ -430,7 +430,7 @@ const HARD_SLOTS: Record<Side, Slot[]> = {
   ],
 }
 
-const MIN_GAP: Record<Difficulty, number> = { easy: 0.9, normal: 0.4, hard: 0.22 }
+const MIN_GAP: Record<Difficulty, number> = { easy: 0.9, normal: 0.3, hard: 0.2 }
 
 export function analyzeRhythm(env: Envelope, duration: number): { bpm: number; beats: number[]; info: BeatInfo[] } {
   // beats are carried by kick & bass: weight the low band so off-beat hi-hats
@@ -484,10 +484,10 @@ export function buildChart(env: Envelope, duration: number, difficulty: Difficul
   let lastT = -10
   let side: Side = rand() < 0.5 ? 'L' : 'R'
   let shape = 0
-  let offbeatBar = -1
+  const offbeats = new Map<number, number>()
   const flip = (s: Side): Side => (s === 'L' ? 'R' : 'L')
 
-  const place = (t: number, beat: number, strength: number, double: boolean, slotIdx: number) => {
+  const place = (t: number, beat: number, strength: number, double: boolean, slotIdx: number, cymbal = double) => {
     if (t - lastT < MIN_GAP[difficulty]) return
     const gap = t - lastT
     lastT = t
@@ -501,12 +501,12 @@ export function buildChart(env: Envelope, duration: number, difficulty: Difficul
     const group = id
     if (double) {
       for (const s of ['L', 'R'] as Side[])
-        notes.push({ id: id++, time: t, side: s, slot: slotFor(s), group, strength, beat, kit })
+        notes.push({ id: id++, time: t, side: s, slot: slotFor(s), group, strength, beat, kit, cymbal })
       return
     }
     // alternate hands; on HARD a slow gap sometimes keeps the same hand
     if (!(difficulty === 'hard' && gap > 0.6 && rand() < 0.3)) side = flip(side)
-    notes.push({ id: id++, time: t, side, slot: slotFor(side), group, strength, beat, kit })
+    notes.push({ id: id++, time: t, side, slot: slotFor(side), group, strength, beat, kit, cymbal })
   }
 
   info.forEach((b, i) => {
@@ -516,29 +516,34 @@ export function buildChart(env: Envelope, duration: number, difficulty: Difficul
     const strength = peakNear(env.onset, b.t) + 0.6 * peakNear(env.low, b.t)
     const newSection = sections.some((s, k) => k > 0 && Math.abs(s.start - b.t) < period / 2)
     if (b.pos === 0) shape = Math.floor(rand() * 4)
+    // cymbals only now and then: the downbeat that opens each 4-bar phrase
+    const phrase = b.pos === 0 && (newSection || b.bar % 4 === 0)
+    const next = info[i + 1]
+    const mid = next ? (b.t + next.t) / 2 : -1
+    const offStrength = next ? peakNear(env.onset, mid, 0.03) : 0
 
     if (difficulty === 'easy') {
       // downbeats only; at very fast tempos every other bar
       if (b.pos !== 0 || (period * 4 < 1.3 && b.bar % 2 === 1)) return
-      place(b.t, 0, strength, newSection, 0)
+      place(b.t, 0, strength, newSection, 0, phrase)
     } else if (difficulty === 'normal') {
-      // beats 1 and 3 of each bar
-      if (b.pos !== 0 && b.pos !== 2) return
+      // every beat once the song gets going, beats 1 & 3 in quiet bars,
+      // and a "4-and" pickup into the next bar when the music pushes there
+      if (level < 0.45 && b.pos % 2 === 1) return
       const double = b.pos === 0 && (newSection || (level > 0.7 && b.bar % 8 === 0))
-      place(b.t, b.pos, strength, double, 0)
+      place(b.t, b.pos, strength, double, 0, phrase || double)
+      if (next && level > 0.7 && b.pos === 3 && offStrength > 1.5) place(mid, -1, strength * 0.8, false, 0)
     } else {
-      // every beat in busy bars, 1 & 3 in quiet ones, plus strong off-beats
+      // every beat (1 & 3 in quiet bars) plus 8th-note off-beats wherever the
+      // music has them: up to 2 per loud bar, all 4 when it is at full power
       if (level < 0.3 && b.pos % 2 === 1) return
       const double = b.pos === 0 && (newSection || (level > 0.55 && b.bar % 4 === 0))
-      place(b.t, b.pos, strength, double, (shape + b.pos) % 4)
-      // at most one syncopated off-beat per loud bar ("2-and" or "4-and")
-      const next = info[i + 1]
-      if (next && level > 0.6 && b.pos % 2 === 1 && offbeatBar !== b.bar) {
-        const mid = (b.t + next.t) / 2
-        if (peakNear(env.onset, mid, 0.03) > 1.8) {
-          offbeatBar = b.bar
-          place(mid, -1, strength * 0.8, false, (shape + b.pos + 2) % 4)
-        }
+      place(b.t, b.pos, strength, double, (shape + b.pos) % 4, phrase || double)
+      const used = offbeats.get(b.bar) ?? 0
+      const cap = level > 0.8 ? 4 : level > 0.5 ? 2 : 0
+      if (next && used < cap && offStrength > (level > 0.8 ? 1.0 : 1.4)) {
+        offbeats.set(b.bar, used + 1)
+        place(mid, -1, strength * 0.8, false, (shape + b.pos + 2) % 4)
       }
     }
   })

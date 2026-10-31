@@ -182,6 +182,7 @@ async function begin(): Promise<void> {
         setLoading('ANALYZING BEATS', 0.25 + r * 0.4, `${Math.round(r * 100)}%`),
       )
       chartKey = key
+      kits?.prepare(chart.sections.map((x) => x.kit))
       if (chart.notes.length < 4) throw new Error('這首歌找不到足夠節拍，請換另一首')
     }
 
@@ -245,7 +246,7 @@ function startGame(): void {
   engine.onEvent = (e) => {
     renderer.event(e)
     if (e.judgment === 'miss') sfx?.miss()
-    else kits?.hit(e.side ?? e.note.side, e.judgment, e.slap, e.note.beat)
+    else kits?.hit(e.side ?? e.note.side, e.judgment, e.slap, e.note.beat, e.note.cymbal)
     bumpCombo()
   }
   player.play(0.05, -COUNT_IN)
