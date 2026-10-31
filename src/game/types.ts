@@ -17,12 +17,25 @@ export interface Note {
   /** notes sharing a group must be hit together (double saucers) */
   group: number
   strength: number
+  /** position in the bar: 0 = downbeat, 1–3 = other beats, -1 = off-beat */
+  beat: number
+  /** percussion kit of the song section this note is in */
+  kit: number
+}
+
+export interface Section {
+  start: number
+  kit: number
 }
 
 export interface Chart {
   bpm: number
   duration: number
   beats: number[]
+  /** times of bar starts (detected downbeats) */
+  downbeats: number[]
+  /** ≤ 4 song sections, each with its own percussion kit */
+  sections: Section[]
   notes: Note[]
 }
 
