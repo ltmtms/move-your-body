@@ -135,8 +135,8 @@ export class Renderer {
     this.popups.push({
       x: pos.x,
       y: pos.y - 30,
-      text: e.slap ? 'SLAP!' : JUDGE_TEXT[j],
-      sub: e.slap ? JUDGE_TEXT[j] : '',
+      text: e.slap ? 'SLAP!' : e.tooSlow ? 'TOO STILL' : JUDGE_TEXT[j],
+      sub: e.slap ? JUDGE_TEXT[j] : e.tooSlow ? 'SWIPE IT!' : '',
       color: e.slap ? '#ffffff' : color,
       born: performance.now(),
     })

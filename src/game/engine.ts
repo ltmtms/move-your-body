@@ -1,4 +1,4 @@
-import type { BodyFrame, Chart, Judgment, Note, PalmSample, Side, Stats, Vec } from './types.ts'
+import type { BodyFrame, Chart, Difficulty, Judgment, Note, PalmSample, Side, Stats, Vec } from './types.ts'
 import type { View } from './view.ts'
 
 export type Grade = 'S+++' | 'S++' | 'S+' | 'S' | 'A' | 'B' | 'C'
@@ -27,8 +27,19 @@ export function gradeFor(stats: Stats): Grade {
 const WEIGHT: Record<Judgment, number> = { perfect: 1, great: 0.7, good: 0.4, miss: 0 }
 const BASE_POINTS = 1000
 const SLAP_BONUS = 250
-/** palm speed (shoulder widths / s) that counts as a slap */
+/** palm speed (shoulder widths / s) that earns the SLAP bonus */
 export const SLAP_SPEED = 3.2
+
+/**
+ * Minimum palm speed (shoulder widths / s) for a touch to count as a slap at
+ * all. A palm that just sits on a saucer never scores. 1 shoulder width is
+ * ~40 cm, so EASY accepts a gentle wave (~0.3 m/s), NORMAL needs a clear
+ * swipe (~0.65 m/s), HARD a quick one (~1 m/s).
+ */
+export const MIN_SWIPE: Record<Difficulty, number> = { easy: 0.8, normal: 1.6, hard: 2.4 }
+
+/** palm samples this far back (ms) are used to measure swipe speed */
+const SPEED_WINDOW_MS = 140
 
 export interface NoteState extends Note {
   state: 'pending' | 'hit' | 'miss'
@@ -38,6 +49,8 @@ export interface NoteState extends Note {
   touching: boolean
   /** which palm made the best contact */
   hand?: Side
+  /** the palm touched it in time but was too still to count as a slap */
+  slow?: boolean
   judgment?: Judgment
   slap?: boolean
   /** where/when it was resolved, for effects */
@@ -52,6 +65,8 @@ export interface HitEvent {
   pos: Vec
   offset: number
   side: Side | null
+  /** miss because the palm rested on the saucer instead of slapping it */
+  tooSlow?: boolean
 }
 
 export class Engine {
@@ -72,6 +87,8 @@ export class Engine {
   readonly lead: number
   /** last committed palm sample per hand, for swept collision */
   private prev: Record<Side, PalmSample | null> = { L: null, R: null }
+  /** recent palm samples per hand, to measure swipe speed over ~140 ms */
+  private recent: Record<Side, PalmSample[]> = { L: [], R: [] }
   private cursor = 0
   onEvent: ((e: HitEvent) => void) | null = null
   frameInterval = 33
@@ -79,7 +96,10 @@ export class Engine {
   private view: View
   private toSong: (perfMs: number) => number
 
-  constructor(chart: Chart, lead: number, view: View, toSong: (perfMs: number) => number) {
+  private difficulty: Difficulty
+
+  constructor(chart: Chart, lead: number, view: View, toSong: (perfMs: number) => number, difficulty: Difficulty) {
+    this.difficulty = difficulty
     this.notes = chart.notes.map((n) => ({ ...n, state: 'pending', best: null, bestSlap: false, touching: false }))
     this.lead = lead
     this.view = view
@@ -90,6 +110,30 @@ export class Engine {
   windows(): { perfect: number; great: number; good: number } {
     const half = Math.min(0.06, this.frameInterval / 2000)
     return { perfect: 0.075 + half, great: 0.14 + half, good: 0.23 + half }
+  }
+
+  /** slowest palm speed that still counts as a slap; relaxed a little on slow cameras */
+  minSwipe(): number {
+    return MIN_SWIPE[this.difficulty] * (this.frameInterval >= 60 ? 0.75 : 1)
+  }
+
+  /**
+   * Palm speed in shoulder widths / s. The latest segment catches a sharp
+   * slap; the displacement over the last ~140 ms rejects tracker jitter,
+   * which averages out to nearly nothing when the hand is really still.
+   */
+  private swipeSpeed(side: Side, cur: PalmSample, a: PalmSample, ta: number, tb: number, unit: number): number {
+    const hist = this.recent[side]
+    hist.push(cur)
+    while (hist.length > 1 && cur.t - hist[0].t > SPEED_WINDOW_MS) hist.shift()
+    const old = hist[0]
+    const span = (cur.t - old.t) / 1000
+    const windowSpeed = span >= 0.05 ? Math.hypot(cur.x - old.x, cur.y - old.y) / span / unit : 0
+    const seg = tb - ta
+    const len = Math.hypot(cur.x - a.x, cur.y - a.y)
+    // a segment shorter than ~8% of a shoulder width is tracker noise, not a swing
+    const segSpeed = a !== cur && seg >= 0.02 && len >= unit * 0.08 ? len / seg / unit : 0
+    return Math.max(windowSpeed, segSpeed)
   }
 
   layout(frame: BodyFrame | null): { anchor: Vec; shoulder: number } {
@@ -134,20 +178,22 @@ export class Engine {
       const cur = frame.palms[side]
       const prev = this.prev[side]
       this.prev[side] = cur
-      if (!cur) continue
+      if (!cur) {
+        this.recent[side].length = 0
+        continue
+      }
       const a = prev && cur.t - prev.t < 250 ? prev : cur
       const ta = this.toSong(a.t)
       const tb = this.toSong(cur.t)
-      const dt = Math.max(1e-3, tb - ta)
-      const speed = Math.hypot(cur.x - a.x, cur.y - a.y) / dt / unit
+      const speed = this.swipeSpeed(side, cur, a, ta, tb, unit)
+      const moving = speed >= this.minSwipe()
 
       for (const n of this.active(ta - w.good, tb + w.good)) {
         if (n.state !== 'pending') continue
         const p = this.targetOf(n, frame)
         // sweep the segment a→cur in small steps, collecting contact times
         const steps = a === cur ? 1 : Math.min(12, 2 + Math.ceil(Math.hypot(cur.x - a.x, cur.y - a.y) / (hitR * 0.5)))
-        let c0 = Infinity
-        let c1 = -Infinity
+        let touched = false
         let closest = Infinity
         let tClosest = tb
         let kClosest = 0
@@ -163,24 +209,21 @@ export class Engine {
             tClosest = t
             kClosest = k
           }
-          if (d <= r) {
-            c0 = Math.min(c0, t)
-            c1 = Math.max(c1, t)
-          }
+          if (d <= r) touched = true
         }
-        if (c0 === Infinity) continue
+        if (!touched) continue
         touchedNow.add(n)
-        const slap = speed >= SLAP_SPEED && a !== cur
+        // resting on the saucer is not a slap: remember it for the feedback
+        if (!moving) {
+          n.slow = true
+          continue
+        }
+        const slap = speed >= SLAP_SPEED
         // swinging away from a saucer it already passed: that pass was timed
         // by the previous segment, the tail end here would read too late/early
-        if (slap && kClosest === 0) continue
-        // a slap is timed at its closest pass; a hover counts from the moment
-        // the palm arrives until it leaves
-        const off = slap
-          ? Math.abs(n.time - tClosest)
-          : n.time >= c0 && n.time <= c1
-            ? 0
-            : Math.min(Math.abs(n.time - c0), Math.abs(n.time - c1))
+        if (a !== cur && kClosest === 0) continue
+        // a slap is timed at its closest pass
+        const off = Math.abs(n.time - tClosest)
         if (off > w.good) continue
         if (n.best === null || off < n.best - 0.01 || (Math.abs(off - n.best) <= 0.01 && slap)) {
           n.best = off
@@ -236,7 +279,15 @@ export class Engine {
         s.score += SLAP_BONUS
       }
     }
-    this.onEvent?.({ note: n, judgment: j, slap: !!n.slap, pos, offset: n.best ?? 0, side: side ?? n.hand ?? null })
+    this.onEvent?.({
+      note: n,
+      judgment: j,
+      slap: !!n.slap,
+      pos,
+      offset: n.best ?? 0,
+      side: side ?? n.hand ?? null,
+      tooSlow: j === 'miss' && !!n.slow,
+    })
   }
 
   get finished(): boolean {

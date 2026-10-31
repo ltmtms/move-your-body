@@ -350,6 +350,15 @@ body:not(.in-game) .camera-tint {
   box-shadow: 0 0 18px var(--pink);
 }
 
+.diff-hint {
+  margin: -4px 0 0;
+  min-height: 2.4em;
+  font-size: 14px;
+  line-height: 1.2;
+  color: var(--cyan);
+  max-width: 34ch;
+}
+
 .best {
   margin: -4px 0 0;
   min-height: 1em;

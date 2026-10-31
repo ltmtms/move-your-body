@@ -87,7 +87,14 @@ try {
 }
 
 // ───────────────────────── menu ─────────────────────────
+const DIFF_HINT: Record<Difficulty, string> = {
+  easy: '輕輕揮手掃過飛碟就得 · a gentle wave counts',
+  normal: '要揮得清楚，手掌擺住唔郁唔計 · a clear swipe, resting on it does not count',
+  hard: '要快拍！慢嘅揮動唔計 · a quick slap, slow swipes do not count',
+}
+
 function refreshMenu(): void {
+  $('diff-hint').textContent = DIFF_HINT[difficulty]
   document.querySelectorAll<HTMLButtonElement>('.diff-btn').forEach((b) => {
     const on = b.dataset.diff === difficulty
     b.classList.toggle('active', on)
@@ -233,7 +240,7 @@ function startGame(): void {
   player?.stop()
   player = new SongPlayer(track.buffer)
   const p = player
-  engine = new Engine(chart, leadFor(difficulty, chart.bpm), view, (ms) => p.timeAt(ms))
+  engine = new Engine(chart, leadFor(difficulty, chart.bpm), view, (ms) => p.timeAt(ms), difficulty)
   kitShown = -1
   engine.onEvent = (e) => {
     renderer.event(e)

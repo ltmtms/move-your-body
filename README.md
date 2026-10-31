@@ -12,8 +12,18 @@ Works on phone, iPad and desktop (Chrome / Safari / Edge, HTTPS required for the
 2. Allow camera access. Step back so your head, shoulders and both hands are visible.
 3. Raise both hands above your shoulders for 1 second to start.
 4. Saucers fly in from the horizon. When one reaches its dashed target ring (the solid approach ring closes onto it on the beat):
-   - **HOVER**: have your palm on the target when the beat lands, or
+   - **SWIPE**: sweep your palm through it on the beat. **A palm that just rests on the saucer does not count**; you have to move.
    - **SLAP**: swipe through it fast for a **+250 SLAP bonus**.
+
+   How much movement is needed depends on the mode:
+
+   | Mode | Minimum palm speed | Feels like |
+   | --- | --- | --- |
+   | EASY | 0.8 shoulder widths/s (~0.3 m/s) | a gentle wave |
+   | NORMAL | 1.6 shoulder widths/s (~0.65 m/s) | a clear swipe |
+   | HARD | 2.4 shoulder widths/s (~1 m/s) | a quick slap |
+
+   Too slow shows **TOO STILL** and counts as a miss. The SLAP bonus starts at 3.2 shoulder widths/s in every mode.
 5. Gold beams link double saucers. Use both hands.
 
 | Mode | Saucers | Targets |
@@ -35,7 +45,7 @@ Combo raises the multiplier up to ×2.
 | --- | --- |
 | Body tracking | **MediaPipe PoseLandmarker (lite)**, GPU delegate with CPU fallback, one inference per new camera frame (`requestVideoFrameCallback`). Upper-body chain: shoulders → elbows → wrists → index/pinky knuckles. Palm centre = wrist + knuckles blend, smoothed with a **One Euro filter**. Pose (rather than a hand model) keeps tracking a motion-blurred hand mid-slap and gives the shoulders as a body anchor. |
 | Target placement | Slots are in body space (shoulder-width units around the shoulder midpoint), so targets stay reachable at any distance or screen size. |
-| Fast slaps vs. frame rate | Collision uses the **swept path** between consecutive palm samples, not single points, so a hand that jumps 30 cm between two 15 fps frames still connects. Contact time is interpolated along the path. A slap is timed at its closest pass, and a hover from when the palm arrives until it leaves. Swing speed above 3.2 shoulder widths/s counts as a SLAP. If the wrist blurs out, the palm is dead-reckoned along its last velocity for up to 140 ms. Timing windows widen by half the measured camera frame interval. |
+| Fast slaps vs. frame rate | Collision uses the **swept path** between consecutive palm samples, not single points, so a hand that jumps 30 cm between two 15 fps frames still connects. Contact time is interpolated along the path. A hit is timed at the palm's closest pass to the saucer. It only counts if the palm is moving: speed is the larger of the latest segment (catches a sharp slap) and the displacement over the last 140 ms (averages tracker jitter away), compared with a per-mode minimum. Segments shorter than 8% of a shoulder width are ignored as noise, and on cameras under ~16 fps the minimum is relaxed by 25%. Speed above 3.2 shoulder widths/s counts as a SLAP. If the wrist blurs out, the palm is dead-reckoned along its last velocity for up to 140 ms. Timing windows widen by half the measured camera frame interval. |
 | Timing | Camera frames are stamped with `captureTime` and mapped to song time through `AudioContext.getOutputTimestamp()`, which covers audio output latency. |
 | Beat analysis | Runs in a Web Worker: 22 kHz mono → STFT log spectral flux. Tempo comes from autocorrelation of a kick/bass-weighted pulse, so off-beat hi-hats can't pull it half a beat off. Then a **dynamic-programming beat tracker** (Ellis 2007). |
 | Downbeats (重拍) | Each beat is scored on kick strength, a chord change (harmony chroma), a bassline change (bass chroma), a timbre change, and the backbeat (snare/clap on 2 and 4). The 4-beat phase with the best score in a sliding ±4-bar window marks the bar starts. Tested at 92–98% on synthetic tracks from 100 to 170 BPM and 93% on the demo track. |
