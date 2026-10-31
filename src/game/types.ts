@@ -36,6 +36,8 @@ export interface Chart {
   beats: number[]
   /** times of bar starts (detected downbeats) */
   downbeats: number[]
+  /** share of beats (0–1) locked to a steady BPM grid */
+  steady: number
   /** ≤ 4 song sections, each with its own percussion kit */
   sections: Section[]
   notes: Note[]
@@ -79,5 +81,6 @@ export interface Stats {
   slaps: number
   judged: number
   /** best possible score for the notes judged so far */
-  maxSoFar: number
+  /** sum of per-saucer timing scores (PERFECT 1, GREAT 0.6, GOOD 0.3) */
+  accuracy: number
 }

@@ -3,20 +3,25 @@ import type { View } from './view.ts'
 
 export type Grade = 'S+++' | 'S++' | 'S+' | 'S' | 'A' | 'B' | 'C'
 
+/** minimum timing accuracy (0–1) per grade */
 export const GRADE_TABLE: [Grade, number][] = [
-  ['S+++', 1.0],
+  ['S+++', 0.98],
   ['S++', 0.95],
-  ['S+', 0.9],
-  ['S', 0.85],
-  ['A', 0.75],
-  ['B', 0.6],
+  ['S+', 0.92],
+  ['S', 0.88],
+  ['A', 0.8],
+  ['B', 0.65],
   ['C', 0],
 ]
 
-/** Grade from score ÷ best-possible score. S+++ also needs zero misses. */
+/**
+ * Grade from timing accuracy alone (PERFECT 1, GREAT 0.6, GOOD 0.3, MISS 0
+ * per saucer). Combo and SLAP bonuses raise the score but not the grade, so
+ * a high rank needs genuinely on-beat hits. S+++ also needs zero misses.
+ */
 export function gradeFor(stats: Stats): Grade {
-  if (stats.maxSoFar <= 0) return 'C'
-  const r = stats.score / stats.maxSoFar
+  if (stats.judged <= 0) return 'C'
+  const r = stats.accuracy / stats.judged
   for (const [g, min] of GRADE_TABLE) {
     if (g === 'S+++' && stats.miss > 0) continue
     if (r >= min) return g
@@ -24,7 +29,7 @@ export function gradeFor(stats: Stats): Grade {
   return 'C'
 }
 
-const WEIGHT: Record<Judgment, number> = { perfect: 1, great: 0.7, good: 0.4, miss: 0 }
+const WEIGHT: Record<Judgment, number> = { perfect: 1, great: 0.6, good: 0.3, miss: 0 }
 const BASE_POINTS = 1000
 const SLAP_BONUS = 250
 /** palm speed (shoulder widths / s) that earns the SLAP bonus */
@@ -37,6 +42,9 @@ export const SLAP_SPEED = 3.2
  * swipe (~0.65 m/s), HARD a quick one (~1 m/s).
  */
 export const MIN_SWIPE: Record<Difficulty, number> = { easy: 0.8, normal: 1.6, hard: 2.4 }
+
+/** how far ahead (s) a palm's path is extrapolated to cue an on-beat drum */
+const CUE_AHEAD = 0.22
 
 /** palm samples this far back (ms) are used to measure swipe speed */
 const SPEED_WINDOW_MS = 140
@@ -51,6 +59,8 @@ export interface NoteState extends Note {
   hand?: Side
   /** the palm touched it in time but was too still to count as a slap */
   slow?: boolean
+  /** its drum is already scheduled on the beat (see cue) */
+  cued?: Side
   judgment?: Judgment
   slap?: boolean
   /** where/when it was resolved, for effects */
@@ -81,7 +91,7 @@ export class Engine {
     miss: 0,
     slaps: 0,
     judged: 0,
-    maxSoFar: 0,
+    accuracy: 0,
   }
   /** seconds a saucer is visible before reaching its target */
   readonly lead: number
@@ -91,6 +101,10 @@ export class Engine {
   private recent: Record<Side, PalmSample[]> = { L: [], R: [] }
   private cursor = 0
   onEvent: ((e: HitEvent) => void) | null = null
+  /** wall clock (ms); replaceable for simulations */
+  clock: () => number = () => performance.now()
+  /** a palm is about to hit this saucer: schedule its drum on the beat */
+  onCue: ((n: NoteState, side: Side) => void) | null = null
   frameInterval = 33
 
   private view: View
@@ -108,8 +122,8 @@ export class Engine {
 
   /** timing windows widen by half a camera frame: at 15 fps we can't do better */
   windows(): { perfect: number; great: number; good: number } {
-    const half = Math.min(0.06, this.frameInterval / 2000)
-    return { perfect: 0.075 + half, great: 0.14 + half, good: 0.23 + half }
+    const half = Math.min(0.05, this.frameInterval / 2000)
+    return { perfect: 0.06 + half, great: 0.11 + half, good: 0.18 + half }
   }
 
   /** slowest palm speed that still counts as a slap; relaxed a little on slow cameras */
@@ -235,6 +249,8 @@ export class Engine {
       }
     }
 
+    this.cue(frame, hitR, unit)
+
     // release: the palm left a saucer it had touched → lock in the best timing
     for (const n of this.active(songNow - w.good - 0.5, songNow + w.good)) {
       if (n.state !== 'pending') continue
@@ -242,6 +258,33 @@ export class Engine {
       else n.touching = touchedNow.has(n)
       // waiting on the saucer: the best is still to come until its time passes
       if (n.state === 'pending' && n.best !== null && songNow > n.time + w.perfect * 0.5) this.resolve(n, null, frame)
+    }
+  }
+
+  /**
+   * On-beat drums. The camera reports a hit ~100 ms after it happens, so a
+   * drum played on detection always lands late. When a moving palm is on
+   * course to reach a saucer (extrapolated along its velocity to the
+   * saucer's time), its drum is scheduled for the exact beat instead.
+   */
+  private cue(frame: BodyFrame, hitR: number, unit: number): void {
+    const realNow = this.toSong(this.clock())
+    for (const n of this.active(realNow + 0.01, this.toSong(frame.t) + CUE_AHEAD)) {
+      if (n.state !== 'pending' || n.cued) continue
+      const p = this.targetOf(n, frame)
+      for (const side of ['L', 'R'] as Side[]) {
+        const cur = frame.palms[side]
+        if (!cur) continue
+        const ahead = Math.min(CUE_AHEAD, Math.max(0, n.time - this.toSong(cur.t)))
+        const speed = Math.hypot(cur.vx, cur.vy) / unit
+        const x = cur.x + cur.vx * ahead
+        const y = cur.y + cur.vy * ahead
+        if (speed >= this.minSwipe() && Math.hypot(x - p.x, y - p.y) <= hitR) {
+          n.cued = side
+          this.onCue?.(n, side)
+          break
+        }
+      }
     }
   }
 
@@ -265,7 +308,7 @@ export class Engine {
 
     const s = this.stats
     s.judged++
-    s.maxSoFar += BASE_POINTS * (1 + Math.min(s.judged - 1, 50) / 50)
+    s.accuracy += WEIGHT[j]
     if (j === 'miss') {
       s.miss++
       s.combo = 0

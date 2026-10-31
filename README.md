@@ -34,19 +34,25 @@ Works on phone, iPad and desktop (Chrome / Safari / Edge, HTTPS required for the
 
 Saucers launch on a beat and arrive on the beat. Quiet intros and breaks get fewer saucers.
 
-Every hit plays a synthesized drum. The song is split into up to 4 sections (intro, verse, drop…), and each section gets its own drum kit: ROCK, 808, LATIN or ELECTRO. The kit therefore changes at most 3 times per song. Inside a kit, the drum depends on the beat and on the hand:
+Every hit plays a synthesized drum. There are 8 drum kits, and each song draws its own set of up to 4, one per section (intro, verse, drop…), so the kit changes at most 3 times. Inside a kit, the drum depends on the beat and on the hand:
 
-| | Downbeat | Beat 3 | Beats 2 & 4 | Off-beat |
-| --- | --- | --- | --- | --- |
-| ROCK | L kick · R snare | L floor tom · R rack tom | L low tom · R rim shot | hi-hat |
-| 808 | L 808 boom · R clap | L low tom · R hi tom | L mid tom · R cowbell | closed / open hat |
-| LATIN | L surdo · R timbale | L tumba · R bongo | L conga · R clave | shaker |
-| ELECTRO | L 909 kick · R 909 snare | L FM tom · R 909 clap | L FM tom · R zap | closed / open hat |
+| Kit | Downbeat | Beat 3 | Beats 2 & 4 | Off-beat | Cymbal |
+| --- | --- | --- | --- | --- | --- |
+| ROCK | L kick · R snare | L floor tom · R rack tom | L low tom · R rim shot | hi-hat | crash |
+| 808 | L 808 boom · R clap | L low tom · R hi tom | L mid tom · R cowbell | closed / open hat | crash |
+| LATIN | L surdo · R timbale | L tumba · R bongo | L conga · R clave | shaker | ride bell |
+| ELECTRO | L 909 kick · R 909 snare | L FM tom · R 909 clap | L FM tom · R zap | closed / open hat | crash |
+| TAIKO | L ōdaiko · R shime | L nagadō · R high shime | L nagadō rim · R atarigane | kachi clack | gong |
+| TABLA | L bāyāñ "ge" · R dāyāñ "na" | L bāyāñ · R "tin" | L "ka" · R "te" | ghungroo | manjira |
+| DJEMBE | L bass · R slap | L dunun · R high tone | L tone · R agogô | shekere | crash |
+| STEEL | L low pan · R high pan | steel pan notes | steel pan notes | güiro · tambourine | crash |
 
-Cymbals come in only now and then: a crash (a ride bell in LATIN) on the downbeat that opens each 4-bar phrase and on double saucers. A SLAP adds a splash.
+Cymbals come in only now and then: on the downbeat that opens each 4-bar phrase and on double saucers. A SLAP adds a splash.
 
-Rank = score ÷ best possible score: **S+++** (≥100%, no misses; SLAP bonuses get you there) · **S++** ≥95% · **S+** ≥90% · **S** ≥85% · **A** ≥75% · **B** ≥60% · **C**.
-Combo raises the multiplier up to ×2.
+**On the beat:** the camera sees a hit about 100 ms after it happens. When your palm is clearly on course to hit a saucer, its drum is scheduled for the exact beat of the music instead of waiting for the camera.
+
+Rank comes from timing accuracy alone. Each saucer counts PERFECT 1, GREAT 0.6, GOOD 0.3 or MISS 0, with windows of ±60 / 110 / 180 ms plus half a camera frame. **S+++** ≥98% with no misses · **S++** ≥95% · **S+** ≥92% · **S** ≥88% · **A** ≥80% · **B** ≥65% · **C**.
+Combo (up to ×2) and SLAP bonuses raise the score but not the rank.
 
 ## How it works
 
@@ -57,7 +63,8 @@ Combo raises the multiplier up to ×2.
 | Fast slaps vs. frame rate | Collision uses the **swept path** between consecutive palm samples, not single points, so a hand that jumps 30 cm between two 15 fps frames still connects. Contact time is interpolated along the path. A hit is timed at the palm's closest pass to the saucer. It only counts if the palm is moving: speed is the larger of the latest segment (catches a sharp slap) and the displacement over the last 140 ms (averages tracker jitter away), compared with a per-mode minimum. Segments shorter than 8% of a shoulder width are ignored as noise, and on cameras under ~16 fps the minimum is relaxed by 25%. Speed above 3.2 shoulder widths/s counts as a SLAP. If the wrist blurs out, the palm is dead-reckoned along its last velocity for up to 140 ms. Timing windows widen by half the measured camera frame interval. |
 | Timing | Camera frames are stamped with `captureTime` and mapped to song time through `AudioContext.getOutputTimestamp()`, which covers audio output latency. |
 | Beat analysis | Runs in a Web Worker: 22 kHz mono → STFT log spectral flux. Tempo comes from autocorrelation of a kick/bass-weighted pulse, so off-beat hi-hats can't pull it half a beat off. Then a **dynamic-programming beat tracker** (Ellis 2007). |
-| Downbeats (重拍) | Each beat is scored on kick strength, a chord change (harmony chroma), a bassline change (bass chroma), a timbre change, and the backbeat (snare/clap on 2 and 4). The 4-beat phase with the best score in a sliding ±4-bar window marks the bar starts. Tested at 92–98% on synthetic tracks from 100 to 170 BPM and 93% on the demo track. |
+| Steady BPM grid | Most 4/4 songs keep a constant tempo, but a beat tracker follows every small wobble. Stretches of ≥ 16 beats that stay within ±35 ms of a straight line are locked onto an exact least-squares BPM grid. One stray beat is snapped back; two in a row end the stretch, so tempo changes and live drumming keep the tracked beats. On test songs, beat jitter drops from ~11 ms to ~1 ms and the BPM comes out exact. A +10 ms correction removes the onset detector's lead. |
+| Downbeats (重拍) | Each beat is scored on kick strength, a chord change (harmony chroma), a bassline change (bass chroma), a timbre change, and the backbeat (snare/clap on 2 and 4). The 4-beat phase with the best score marks the bar starts. Inside a steady stretch it is fixed for the whole stretch and only moves on overwhelming evidence; elsewhere a sliding ±4-bar window is used. Tested at 92–98% on synthetic tracks from 100 to 170 BPM and 93% on the demo track. |
 | Sections & kits | Phrase boundaries (every 4 bars) where loudness or timbre changes the most split the song into ≤ 4 sections. Drums are synthesized with [Tone.js](https://tonejs.github.io) (MIT): MembraneSynth (kicks, toms, congas), NoiseSynth (snares, claps, shakers), MetalSynth (hats, cowbell, cymbals) and FMSynth (rim, clave, electro toms), through a compressor and light reverb. Levels were balanced by rendering each drum offline and measuring its peak. |
 | Rendering | Canvas 2D: synthwave floor whose lines are the song's beats, pre-rendered glowing saucer sprites, palm trails (white when you are slapping), particles. The DOM HUD uses safe-area insets. |
 

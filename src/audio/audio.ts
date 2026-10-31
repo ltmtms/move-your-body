@@ -140,6 +140,11 @@ export class SongPlayer {
     return this.timeAt(performance.now())
   }
 
+  /** AudioContext time at which song time `t` is played (for on-beat sounds) */
+  ctxTimeAt(t: number): number {
+    return this.startCtx + t
+  }
+
   get duration(): number {
     return this.buffer.duration
   }

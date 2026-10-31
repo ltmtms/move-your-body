@@ -298,7 +298,7 @@ function zscore(x: number[]): number[] {
  * from those cues, then the 4-beat phase with the highest average score in a
  * sliding ±4-bar window wins, so one skipped beat only shifts bars locally.
  */
-export function findDownbeats(env: Envelope, beats: number[]): BeatInfo[] {
+export function findDownbeats(env: Envelope, beats: number[], segments: GridSegment[] = []): BeatInfo[] {
   const n = beats.length
   if (n === 0) return []
   const period = n > 1 ? (beats[n - 1] - beats[0]) / (n - 1) : 0.5
@@ -330,18 +330,38 @@ export function findDownbeats(env: Envelope, beats: number[]): BeatInfo[] {
   )
   const score = beats.map((_, i) => kick[i] + 1.2 * chord[i] + 1.0 * bass[i] + 0.8 * ctx[i] + 0.6 * back[i])
 
-  const phase = new Int8Array(n)
-  let cur = -1
-  for (let b0 = 0; b0 < n; b0 += 8) {
+  // which steady stretch (if any) each beat belongs to
+  const segOf = new Int16Array(n).fill(-1)
+  segments.forEach((g, k) => {
+    for (let j = g.from; j < g.to; j++) segOf[j] = k
+  })
+  const bestPhase = (from: number, to: number) => {
     const sum = [0, 0, 0, 0]
     const cnt = [0, 0, 0, 0]
-    for (let j = Math.max(0, b0 - 16); j < Math.min(n, b0 + 24); j++) {
+    for (let j = Math.max(0, from); j < Math.min(n, to); j++) {
       sum[j % 4] += score[j]
       cnt[j % 4]++
     }
-    const mean = sum.map((s, p) => s / Math.max(1, cnt[p]))
-    let best = mean.indexOf(Math.max(...mean))
-    if (cur >= 0 && mean[best] - mean[cur] < 0.25) best = cur // hysteresis: don't flicker
+    return sum.map((s, p) => s / Math.max(1, cnt[p]))
+  }
+  const argmax = (m: number[]) => m.indexOf(Math.max(...m))
+
+  const phase = new Int8Array(n)
+  let cur = -1
+  let curSeg = -2
+  for (let b0 = 0; b0 < n; b0 += 8) {
+    const seg = segOf[b0]
+    // in a steady 4/4 stretch the bar can't wander: start from the phase
+    // that fits the whole stretch and only move on overwhelming evidence
+    if (seg !== curSeg) {
+      curSeg = seg
+      if (seg >= 0) cur = argmax(bestPhase(segments[seg].from, segments[seg].to))
+    }
+    const radius = seg >= 0 ? 32 : 16
+    const mean = bestPhase(b0 - radius, b0 + 8 + radius)
+    let best = argmax(mean)
+    const hysteresis = seg >= 0 ? 0.6 : 0.25
+    if (cur >= 0 && mean[best] - mean[cur] < hysteresis) best = cur
     cur = best
     for (let j = b0; j < Math.min(n, b0 + 8); j++) phase[j] = cur
   }
@@ -397,6 +417,10 @@ export function findSections(env: Envelope, info: BeatInfo[], loud: number, maxS
 }
 
 /** if the low end hits harder half-way between our beats, we locked onto the off-beat */
+export function fixHalfBeatForTest(env: Envelope, beats: number[]): number[] {
+  return fixHalfBeat(env, beats)
+}
+
 function fixHalfBeat(env: Envelope, beats: number[]): number[] {
   if (beats.length < 8) return beats
   let on = 0
@@ -430,9 +454,91 @@ const HARD_SLOTS: Record<Side, Slot[]> = {
   ],
 }
 
+/** number of drum kits in kits.ts */
+export const KIT_COUNT = 8
+
 const MIN_GAP: Record<Difficulty, number> = { easy: 0.9, normal: 0.3, hard: 0.2 }
 
-export function analyzeRhythm(env: Envelope, duration: number): { bpm: number; beats: number[]; info: BeatInfo[] } {
+/** a stretch of the song that keeps a steady tempo (beat index range [from, to)) */
+export interface GridSegment {
+  from: number
+  to: number
+  bpm: number
+}
+
+/** measured lead of detected beats ahead of the real attack (s) */
+const ONSET_LEAD = 0.01
+
+/** how far (s) a tracked beat may sit off the tempo line and still be "steady" */
+const GRID_TOL = 0.035
+/** shortest steady stretch worth locking: 4 bars of 4/4 */
+const GRID_MIN = 16
+
+/**
+ * Lock steady-tempo stretches onto an exact BPM grid. Most 4/4 pop and
+ * dance music runs at a constant tempo, but a beat tracker follows every
+ * small wobble in the audio, so saucers and drums would drift around the
+ * pulse. A least-squares line t = a + b·k is grown over consecutive beats
+ * while they stay within ±35 ms; one stray beat is snapped back, two in a
+ * row end the stretch. Steady stretches are replaced by the exact grid;
+ * anything else (tempo changes, rubato, live drummers) keeps the tracked
+ * beats.
+ */
+export function lockToGrid(beats: number[]): { beats: number[]; segments: GridSegment[] } {
+  const n = beats.length
+  const out = beats.slice()
+  const segments: GridSegment[] = []
+  let i = 0
+  while (i + GRID_MIN <= n) {
+    let S = 0
+    let Sk = 0
+    let St = 0
+    let Skk = 0
+    let Skt = 0
+    const add = (k: number) => {
+      const x = k - i
+      S++
+      Sk += x
+      St += beats[k]
+      Skk += x * x
+      Skt += x * beats[k]
+    }
+    let a = 0
+    let b = 0
+    const fit = () => {
+      b = (S * Skt - Sk * St) / (S * Skk - Sk * Sk)
+      a = (St - b * Sk) / S
+    }
+    const ok = (k: number) => Math.abs(beats[k] - (a + b * (k - i))) <= GRID_TOL
+    for (let k = i; k < i + GRID_MIN; k++) add(k)
+    fit()
+    let steady = true
+    for (let k = i; k < i + GRID_MIN && steady; k++) steady = ok(k)
+    if (!steady) {
+      i++
+      continue
+    }
+    let j = i + GRID_MIN
+    while (j < n) {
+      if (ok(j)) {
+        add(j)
+        fit()
+        j++
+      } else if (j + 1 < n && ok(j + 1)) {
+        j++ // one stray beat: snap it onto the grid and carry on
+      } else break
+    }
+    for (let k = i; k < j; k++) out[k] = a + b * (k - i)
+    segments.push({ from: i, to: j, bpm: 60 / b })
+    i = j
+  }
+  return { beats: out, segments }
+}
+
+export function analyzeRhythm(
+  env: Envelope,
+  duration: number,
+): { bpm: number; beats: number[]; info: BeatInfo[]; steady: number } {
   // beats are carried by kick & bass: weight the low band so off-beat hi-hats
   // (every techno track has them) can't pull the tracker half a beat off
   const pulse = new Float32Array(env.onset.length)
@@ -445,20 +551,33 @@ export function analyzeRhythm(env: Envelope, duration: number): { bpm: number; b
     beats = []
     for (let t = 1; t < duration - 0.5; t += 0.5) beats.push(t)
   }
+  const grid = lockToGrid(beats)
+  // the onset detector fires 5–13 ms before the true attack; centre it
+  beats = grid.beats.map((t) => t + ONSET_LEAD)
+  const steadyBeats = grid.segments.reduce((n, g) => n + g.to - g.from, 0)
+  // the song's BPM: from its longest steady stretch if it has one
+  const longest = [...grid.segments].sort((x, y) => y.to - y.from - (x.to - x.from))[0]
   const iv = beats.slice(1).map((b, i) => b - beats[i]).sort((a, b) => a - b)
-  if (iv.length) bpm = 60 / iv[Math.floor(iv.length / 2)]
-  return { bpm, beats, info: findDownbeats(env, beats) }
+  if (longest) bpm = longest.bpm
+  else if (iv.length) bpm = 60 / iv[Math.floor(iv.length / 2)]
+  return { bpm, beats, info: findDownbeats(env, beats, grid.segments), steady: steadyBeats / Math.max(1, beats.length) }
 }
 
 export function buildChart(env: Envelope, duration: number, difficulty: Difficulty, seed: number): Chart {
-  const { bpm, beats, info } = analyzeRhythm(env, duration)
+  const { bpm, beats, info, steady } = analyzeRhythm(env, duration)
   const period = 60 / bpm
 
   const rand = rng(seed)
   const loud = Array.from(env.rms).sort((a, b) => a - b)[Math.floor(env.rms.length * 0.95)] || 1
   const starts = findSections(env, info, loud)
-  const kit0 = seed % 4
-  const sections = starts.map((start, i) => ({ start, kit: (kit0 + i) % 4 }))
+  // each song draws its own set of drum kits (out of KIT_COUNT), one per section
+  const kitRand = rng(seed ^ 0x9e3779b9)
+  const kitOrder = Array.from({ length: KIT_COUNT }, (_, i) => i)
+  for (let i = kitOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(kitRand() * (i + 1))
+    ;[kitOrder[i], kitOrder[j]] = [kitOrder[j], kitOrder[i]]
+  }
+  const sections = starts.map((start, i) => ({ start, kit: kitOrder[i % KIT_COUNT] }))
   const kitAt = (t: number) => {
     let k = sections[0].kit
     for (const s of sections) if (s.start <= t + 0.05) k = s.kit
@@ -553,6 +672,7 @@ export function buildChart(env: Envelope, duration: number, difficulty: Difficul
     duration,
     beats,
     downbeats: info.filter((b) => b.pos === 0).map((b) => b.t),
+    steady,
     sections,
     notes,
   }

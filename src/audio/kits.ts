@@ -198,6 +198,100 @@ const KITS: { name: string; make: (b: B) => Omit<Kit, 'name'> }[] = [
       cymbal: crash(1.2),
     }),
   },
+  {
+    name: 'TAIKO',
+    make: ({ membrane, noise, metal, fm, both }) => ({
+      L: [
+        membrane('E1', { pitchDecay: 0.1, octaves: 3, decay: 1.1, level: 1.1 }), // ōdaiko
+        membrane('A1', { pitchDecay: 0.07, octaves: 2.5, decay: 0.6 }), // nagadō
+        membrane('D2', { pitchDecay: 0.05, octaves: 2, decay: 0.4, level: 0.9 }), // nagadō rim side
+      ],
+      R: [
+        both(
+          membrane('D4', { pitchDecay: 0.006, octaves: 1, decay: 0.12, level: 1.2 }),
+          noise({ type: 'white', filter: 'highpass', freq: 3000, decay: 0.02, level: 0.8 }),
+        ), // shime-daiko
+        membrane('A4', { pitchDecay: 0.006, octaves: 1, decay: 0.1, level: 1.8 }), // shime, high
+        metal(1100, { harmonicity: 1.7, modulationIndex: 4, resonance: 4000, octaves: 0.4, decay: 0.35, level: 0.3 }), // atarigane
+      ],
+      hat: {
+        L: fm('A5', { harmonicity: 2, modulationIndex: 6, decay: 0.03, level: 0.5 }), // kachi clack
+        R: fm('D6', { harmonicity: 2, modulationIndex: 6, decay: 0.03, level: 0.45 }),
+      },
+      // gong instead of a crash
+      cymbal: metal(90, { harmonicity: 1.25, modulationIndex: 14, resonance: 900, octaves: 0.5, decay: 2.6, level: 0.16 }, 2),
+    }),
+  },
+  {
+    name: 'TABLA',
+    make: ({ membrane, noise, metal, both }) => ({
+      L: [
+        membrane('A1', { pitchDecay: 0.25, octaves: 0.8, decay: 0.6, level: 1.1 }), // bāyāñ "ge"
+        membrane('D2', { pitchDecay: 0.2, octaves: 0.7, decay: 0.45 }), // bāyāñ, higher
+        membrane('E2', { pitchDecay: 0.01, octaves: 1, decay: 0.08, level: 0.9 }), // "ka", dry slap
+      ],
+      R: [
+        both(
+          membrane('C5', { pitchDecay: 0.003, octaves: 0.3, decay: 0.35, level: 1.1 }),
+          metal(520, { harmonicity: 1.5, modulationIndex: 2, resonance: 3000, octaves: 0.3, decay: 0.3, level: 0.12 }),
+        ), // dāyāñ "na"
+        membrane('G4', { pitchDecay: 0.003, octaves: 0.3, decay: 0.15, level: 1.1 }), // "tin"
+        both(
+          noise({ type: 'white', filter: 'bandpass', freq: 1500, q: 1.5, decay: 0.03, level: 1.2 }),
+          membrane('D4', { pitchDecay: 0.004, octaves: 0.5, decay: 0.04, level: 0.7 }),
+        ), // "te"
+      ],
+      hat: {
+        L: noise({ type: 'white', filter: 'bandpass', freq: 9000, q: 0.8, decay: 0.1, level: 1.4 }), // ghungroo
+        R: noise({ type: 'white', filter: 'bandpass', freq: 10000, q: 0.8, decay: 0.08, level: 1.3 }),
+      },
+      // manjira (small hand cymbals)
+      cymbal: metal(1400, { harmonicity: 2.2, modulationIndex: 6, resonance: 6000, octaves: 0.6, decay: 1.4, level: 0.3 }, 2),
+    }),
+  },
+  {
+    name: 'DJEMBE',
+    make: ({ membrane, noise, metal, both, crash }) => ({
+      L: [
+        membrane('C2', { pitchDecay: 0.03, octaves: 2.5, decay: 0.45, level: 1.1 }), // djembe bass
+        membrane('G1', { pitchDecay: 0.05, octaves: 3, decay: 0.5 }), // dunun
+        membrane('A3', { pitchDecay: 0.008, octaves: 1, decay: 0.2, level: 0.9 }), // djembe tone
+      ],
+      R: [
+        both(
+          noise({ type: 'white', filter: 'bandpass', freq: 2200, q: 1.5, decay: 0.06, level: 3 }),
+          membrane('E4', { pitchDecay: 0.004, octaves: 0.8, decay: 0.06, level: 1 }),
+        ), // djembe slap
+        membrane('D4', { pitchDecay: 0.008, octaves: 1, decay: 0.18, level: 1 }), // high tone
+        metal(880, { harmonicity: 1.42, modulationIndex: 3, resonance: 3000, octaves: 0.3, decay: 0.3, level: 0.32 }), // agogô bell
+      ],
+      hat: {
+        L: noise({ type: 'white', filter: 'bandpass', freq: 5000, q: 0.7, decay: 0.09, level: 1.4 }), // shekere
+        R: noise({ type: 'white', filter: 'bandpass', freq: 6500, q: 0.7, decay: 0.07, level: 1.3 }),
+      },
+      cymbal: crash(0.9),
+    }),
+  },
+  {
+    name: 'STEEL',
+    make: ({ noise, fm, crash }) => ({
+      L: [
+        fm('C4', { harmonicity: 2, modulationIndex: 1.5, decay: 0.6, level: 0.35 }), // steel pan, low
+        fm('G4', { harmonicity: 2, modulationIndex: 1.5, decay: 0.5, level: 0.32 }),
+        fm('E4', { harmonicity: 2, modulationIndex: 1.5, decay: 0.5, level: 0.32 }),
+      ],
+      R: [
+        fm('C5', { harmonicity: 2, modulationIndex: 1.5, decay: 0.45, level: 0.3 }), // steel pan, high
+        fm('E5', { harmonicity: 2, modulationIndex: 1.5, decay: 0.4, level: 0.28 }),
+        fm('G5', { harmonicity: 2, modulationIndex: 1.5, decay: 0.4, level: 0.28 }),
+      ],
+      hat: {
+        L: noise({ type: 'white', filter: 'bandpass', freq: 3200, q: 2, decay: 0.03, level: 0.8, pulses: 4 }), // güiro
+        R: noise({ type: 'white', filter: 'bandpass', freq: 7000, q: 1, decay: 0.08, level: 1.3 }), // tambourine
+      },
+      cymbal: crash(1.4),
+    }),
+  },
 ]
 
 export class HitKits {
@@ -248,18 +342,36 @@ export class HitKits {
     return true
   }
 
-  hit(side: Side, judgment: Exclude<Judgment, 'miss'>, slap: boolean, beat: number, cymbal: boolean): void {
-    const kit = this.kit(Math.max(0, this.current))
-    const t = Tone.now()
-    const accent = beat === 0 ? 1 : beat < 0 ? 0.75 : 0.85
-    const vel = Math.min(1, WEIGHT[judgment] * accent * (slap ? 1.15 : 1))
+  /**
+   * Play the drum for a note: its kit, the hand, the beat in the bar, and an
+   * optional cymbal. `at` is an AudioContext time; a future `at` puts the
+   * drum exactly on the music's beat.
+   */
+  play(o: { kit: number; side: Side; beat: number; cymbal: boolean; vel: number; at?: number }): void {
+    const kit = this.kit(this.index(o.kit))
+    const t = Math.max(Tone.now(), o.at ?? 0)
+    const accent = o.beat === 0 ? 1 : o.beat < 0 ? 0.75 : 0.85
+    const vel = Math.min(1, o.vel * accent)
     try {
-      if (beat < 0) kit.hat[side](t, vel)
-      else kit[side][beat === 0 ? 0 : beat === 2 ? 1 : 2](t, vel)
-      if (cymbal) kit.cymbal(t, vel * 0.8)
-      if (slap) this.splash(t, 0.7)
+      if (o.beat < 0) kit.hat[o.side](t, vel)
+      else kit[o.side][o.beat === 0 ? 0 : o.beat === 2 ? 1 : 2](t, vel)
+      if (o.cymbal) kit.cymbal(t, vel * 0.8)
     } catch (err) {
       // a dropped hit sound must never break the game loop
+      console.warn(err)
+    }
+  }
+
+  /** velocity for a judged hit */
+  static velocity(judgment: Exclude<Judgment, 'miss'>, slap: boolean): number {
+    return WEIGHT[judgment] * (slap ? 1.15 : 1)
+  }
+
+  /** SLAP: a short splash on top of the drum */
+  slap(): void {
+    try {
+      this.splash(Tone.now(), 0.7)
+    } catch (err) {
       console.warn(err)
     }
   }

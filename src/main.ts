@@ -1,6 +1,6 @@
 import './style.css'
 import { analyze, audioContext, decodeFile, hashString, renderDemoTrack, SongPlayer, Sfx } from './audio/audio.ts'
-import type { HitKits } from './audio/kits.ts'
+import type { HitKits as HitKitsT } from './audio/kits.ts'
 import { Engine, gradeFor, SLAP_SPEED } from './game/engine.ts'
 import { Renderer } from './game/renderer.ts'
 import type { BodyFrame, Chart, Difficulty } from './game/types.ts'
@@ -71,7 +71,8 @@ let tracker: PoseTracker | null = null
 let player: SongPlayer | null = null
 let engine: Engine | null = null
 let sfx: Sfx | null = null
-let kits: HitKits | null = null
+let kits: HitKitsT | null = null
+let HitKits: typeof HitKitsT
 let kitShown = -1
 let mode: 'idle' | 'calibrate' | 'play' | 'paused' = 'idle'
 let lastFrame: BodyFrame | null = null
@@ -159,7 +160,7 @@ async function begin(): Promise<void> {
   show('loading')
   try {
     if (!kits) {
-      const { HitKits } = await import('./audio/kits.ts')
+      ;({ HitKits } = await import('./audio/kits.ts'))
       kits = HitKits.create(audioContext())
     }
     // camera first so the permission prompt appears while we crunch audio
@@ -194,7 +195,7 @@ async function begin(): Promise<void> {
       tracker.onFrame = onBody
       tracker.start()
     }
-    setLoading('READY', 1, `${chart.bpm} BPM · ${chart.notes.length} saucers`)
+    setLoading('READY', 1, `${chart.bpm} BPM · ${Math.round(chart.steady * 100)}% on the 4/4 grid · ${chart.notes.length} saucers`)
     startCalibration()
   } catch (err) {
     console.error(err)
@@ -243,10 +244,17 @@ function startGame(): void {
   const p = player
   engine = new Engine(chart, leadFor(difficulty, chart.bpm), view, (ms) => p.timeAt(ms), difficulty)
   kitShown = -1
+  // drums land on the music's beat when the hit can be seen coming
+  engine.onCue = (n, side) =>
+    kits?.play({ kit: n.kit, side, beat: n.beat, cymbal: n.cymbal, vel: 0.9, at: p.ctxTimeAt(n.time) })
   engine.onEvent = (e) => {
     renderer.event(e)
     if (e.judgment === 'miss') sfx?.miss()
-    else kits?.hit(e.side ?? e.note.side, e.judgment, e.slap, e.note.beat, e.note.cymbal)
+    else {
+      const n = e.note
+      if (!n.cued) kits?.play({ kit: n.kit, side: e.side ?? n.side, beat: n.beat, cymbal: n.cymbal, vel: HitKits.velocity(e.judgment, e.slap) })
+      if (e.slap) kits?.slap()
+    }
     bumpCombo()
   }
   player.play(0.05, -COUNT_IN)
